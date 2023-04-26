@@ -110,10 +110,79 @@ const getAllReservations = function (guest_id, limit = 10) {
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
-const getAllProperties = function (options, limit = 10) {
-    return pool.query(`SELECT * FROM properties LIMIT $1`, [limit])
+// const getAllProperties = function (options, limit = 10) {
+  
+//       return pool.query(`
+//           SELECT properties.*, avg(property_reviews.rating) as average_rating
+//           FROM properties
+//           JOIN property_reviews ON properties.id = property_id
+//           WHERE  city = $1, owner_id = $2, minimum_price_per_night = $3, maximum_price_per_night = $4, minimum_rating = $5)`, 
+//           [city, owner_id, minimum_price_per_night, maximum_price_per_night, minimum_rating])  
+          
+          const getAllProperties = function (options, limit = 10) {
+            // 2 
+            console.log(options)
+            let whereclausemap = {city: 'city like $', 
+                          owner_id: 'owner_id = $',
+                          minimum_price_per_night: 'cost_per_night > $', 
+                          maximum_price_per_night: 'cost_per_night < $', 
+                          minimum_rating: 'average_rating > $'
+                        };
+            let presentoptions = Object.keys(options).filter(key => options[key])
+            let whereclause = presentoptions.map((key, index) => whereclausemap[key] + (index+1)).join(' AND ')
+            // 1
+
+            const queryParams = presentoptions.map(key => {
+              console.log('key is', key)
+              return whereclausemap[key].includes(' like ') ? `%${options[key]}%` : options[key]
+            });
+
+            // 
+            let queryString = `
+            SELECT properties.*, avg(property_reviews.rating) as average_rating
+            FROM properties
+            JOIN property_reviews ON properties.id = property_id
+            ${(whereclause ? 'WHERE ' : '') + whereclause}
+            `;
+          
+            // // 3
+            // if (options.city) {
+            //   queryParams.push(`%${options.city}%`);
+            //   queryString += `WHERE city LIKE $${queryParams.length} `;
+            // }
+            // // 
+            // if (options.minimum_cost) {
+            //   queryParams.push(`%${options.minimum_cost}`);
+            //   queryString += `WHERE minimum_cost`;
+            // }
+            // // 
+            // if (options.maximum_cost) {
+            //   queryParams.push(`%${options.maximum_cost}`);
+            //   queryString += `WHERE maximum_cost`;
+            // }
+            // // 
+            // if (options.minimum_rating) {
+            //   queryParams.push(`%${options.minimum_rating}`);
+            //   queryString += `WHERE minimum_rating`;
+            // }
+            // 4
+            queryParams.push(limit);
+            queryString += `
+            GROUP BY properties.id
+            ORDER BY cost_per_night
+            LIMIT $${queryParams.length};
+            `;
+          
+            // 5
+            console.log(queryString, queryParams);
+          
+            // 6
+            return pool.query(queryString, queryParams)
+            // .then((res) => res.rows);
+          
+  // return pool.query(`SELECT * FROM properties LIMIT $1`, [limit])
       .then((result) => {
-        // console.log(result.rows);
+        console.log(result.rows);
         return result.rows;
       })
       .catch((err) => {
